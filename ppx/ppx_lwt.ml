@@ -97,7 +97,7 @@ let lwt_expression mapper ({ pexp_attributes } as exp) =
 	let rec __pa_lwt_loop () =
 	  if [%e cond] then Lwt.bind [%e body] __pa_lwt_loop
 	  else Lwt.return ()
-	in __pa_lwt_loop
+	in __pa_lwt_loop ()
        ]
      in mapper.expr mapper { new_exp with pexp_attributes }
 

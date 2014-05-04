@@ -298,16 +298,6 @@ Library "lwt-syntax-options"
   XMETADescription: Options for syntax extensions
   XMETARequires: camlp4
 
-Executable ppx_lwt
-  Build$: flag(ppx) || flag(all)
-  Install$: flag(ppx) || flag(all)
-  Path: ppx
-  MainIs : ppx_lwt.ml
-  BuildDepends: compiler-libs.common, ppx_tools
-  ByteOpt: -ppx "ocamlfind ppx_tools/ppx_metaquot"
-  NativeOpt: -ppx "ocamlfind ppx_tools/ppx_metaquot"
-  CompiledObject: best
-
 Library "lwt-syntax-log"
   Build$: flag(syntax) || flag(all)
   Install$: flag(syntax) || flag(all)
@@ -319,6 +309,16 @@ Library "lwt-syntax-log"
   XMETAType: syntax
   XMETADescription: Syntactic sugars for logging
   XMETARequires: camlp4, lwt.syntax.options
+
+Executable ppx_lwt
+  Build$: flag(ppx) || flag(all)
+  Install$: flag(ppx) || flag(all)
+  Path: ppx
+  MainIs : ppx_lwt.ml
+  BuildDepends: compiler-libs.common, ppx_tools
+  ByteOpt: -ppx "ocamlfind ppx_tools/ppx_metaquot"
+  NativeOpt: -ppx "ocamlfind ppx_tools/ppx_metaquot"
+  CompiledObject: byte # should be best, necessary for tests.
 
 # +-------------------------------------------------------------------+
 # | Toplevel                                                          |
@@ -437,6 +437,17 @@ Executable test_preemptive
   MainIs: main.ml
   BuildDepends: test, lwt, unix, lwt.unix, lwt.preemptive, threads
 
+Executable test_ppx
+  Path: tests/ppx
+  Build$: flag(tests) && ((flag(ppx) && flag(unix)) || flag(all))
+  Install: false
+  CompiledObject: best
+  MainIs: main.ml
+  BuildTools: ppx_lwt
+  NativeOpt: -ppx ppx/ppx_lwt.byte # hacky, $ppx_lwt doesn't work.
+  ByteOpt: -ppx ppx/ppx_lwt.byte
+  BuildDepends: test, lwt, lwt.unix
+
 Test core
   Command: $test_core
   TestTools: test_core
@@ -456,6 +467,11 @@ Test preemptive
   Command: $test_preemptive
   TestTools: test_preemptive
   Run$: flag(tests) && ((flag(preemptive) && flag(unix)) || flag(all))
+
+Test ppx
+  Command: $test_ppx
+  TestTools: test_ppx
+  Run$: flag(tests) && ((flag(ppx) && flag(unix)) || flag(all))
 
 # +-------------------------------------------------------------------+
 # | Misc                                                              |
