@@ -78,18 +78,28 @@ end
 
 (* part 3: handling effects *)
 
-let handler : _ Effect.Deep.effect_handler =
+let[@inline] is_canceled lwt = match Lwt.state lwt with
+  | Lwt.Fail Lwt.Canceled -> true
+  | _ -> false
+
+(** Effect handler for a task returning the given promise *)
+let handler_for (lwt: _ Lwt.t) : _ Effect.Deep.effect_handler =
   let effc : type b. b Effect.t -> ((b, unit) Effect.Deep.continuation -> 'a) option =
     function
     | Yield ->
       Some (fun k ->
-        let storage = Storage.save_current () in
-        push_task (fun () ->
-          Storage.restore_current storage;
-          Effect.Deep.continue k ()))
+        if is_canceled lwt
+        then push_task (fun () -> Effect.Deep.discontinue k Lwt.Canceled)
+        else 
+          let storage = Storage.save_current () in
+          push_task (fun () ->
+            Storage.restore_current storage;
+            Effect.Deep.continue k ()))
     | Await fut ->
       Some
         (fun k ->
+          (* propagate cancelation of the task to [fut] *)
+          Lwt.on_cancel lwt (fun () -> Lwt.cancel fut);
           let storage = Storage.save_current () in
           Lwt.on_any fut
             (fun res -> push_task (fun () ->
@@ -102,22 +112,24 @@ let handler : _ Effect.Deep.effect_handler =
 
 (* part 4: putting it all together: running tasks *)
 
-let run_inside_effect_handler_and_resolve_ (type a) (promise : a Lwt.u) f () : unit =
+let run_inside_effect_handler_and_resolve_ (type a) (lwt: a Lwt.t) (promise : a Lwt.u) f () : unit =
   let run_f_and_set_res () =
     Storage.reset_to_empty();
     match f () with
     | res -> Lwt.wakeup promise res
     | exception exc -> Lwt.wakeup_exn promise exc
   in
-  Effect.Deep.try_with run_f_and_set_res () handler
+  Effect.Deep.try_with run_f_and_set_res () (handler_for lwt)
 
 let spawn f : _ Lwt.t =
   setup_hooks ();
   let lwt, resolve = Lwt.wait () in
-  push_task (run_inside_effect_handler_and_resolve_ resolve f);
+  push_task (run_inside_effect_handler_and_resolve_ lwt resolve f);
   lwt
 
 (* part 4 (encore): running a task in the background *)
+
+let handler_for_background_tasks = handler_for Lwt.return_unit
 
 let run_inside_effect_handler_in_the_background_ f () : unit =
   let run_f () : unit =
@@ -127,7 +139,7 @@ let run_inside_effect_handler_in_the_background_ f () : unit =
     with exn ->
       !Lwt.async_exception_hook exn
   in
-  Effect.Deep.try_with run_f () handler
+  Effect.Deep.try_with run_f () handler_for_background_tasks
 
 let spawn_in_the_background f : unit =
   setup_hooks ();

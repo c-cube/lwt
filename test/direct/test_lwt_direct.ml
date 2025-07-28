@@ -189,7 +189,7 @@ let io_tests = suite "io" [
         with End_of_file -> false
       do ()
       done;
-      List.rev !lines = ["some"; "interesting"; "text string here!"]      
+      List.rev !lines = ["some"; "interesting"; "text string here!"]
   end;
 
   test "pipe" begin fun () ->
@@ -216,8 +216,25 @@ let io_tests = suite "io" [
   end
 ]
 
+let cancel_tests = suite "cancel" [
+  test "cancel1" begin fun () ->
+    let p = spawn (fun () ->
+      Lwt_unix.sleep 5. |> await;
+      "should never be reached"
+    ) in
+
+    Lwt.cancel p;
+
+    Lwt.catch
+      (fun () -> let+ _ = p in false)
+      (function Lwt.Canceled -> Lwt.return true | _ -> Lwt.return false)
+  end
+
+]
+
 let suites = [
   main_tests;
   storage_tests;
   io_tests;
+  cancel_tests;
 ]
